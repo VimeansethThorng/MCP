@@ -551,6 +551,11 @@ async def main():
     """Main function to run the MCP server."""
     try:
         # Run the server using stdio transport
+        # Log a short startup message to stderr so it's visible when running manually.
+        # This does not interfere with the MCP stdio transport because logging
+        # writes to stderr while the protocol uses stdout.
+        logger.info("Example MCP Server starting (stdio transport)")
+
         async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
             await server.run(
                 read_stream,
