@@ -1,0 +1,18 @@
+{
+  "servers": {
+    "example-mcp-server-python": {
+      "type": "stdio",
+      "command": "/Users/vimeanseththorng/Documents/MCP/python-server/.venv/bin/python",
+      "args": [
+        "/Users/vimeanseththorng/Documents/MCP/python-server/src/server.py"
+      ]
+    },
+    "example-mcp-server-ts": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "/Users/vimeanseththorng/Documents/MCP/typescript-server/build/index.js"
+      ]
+    }
+  }
+}
