@@ -13,6 +13,7 @@ A complete Model Context Protocol (MCP) server built with Python, demonstrating 
 - **System Information**: Get current time, platform details, and memory usage
 - **Data Generator**: Create mock data for testing (users, products, orders)
 - **MySQL Query**: Execute SELECT queries against MySQL databases safely
+- **SQLite Query**: Local database operations with sample data initialization
 
 ### 📝 Prompts
 - **Concept Explanation**: Generate detailed explanations for technical concepts
@@ -54,6 +55,11 @@ A complete Model Context Protocol (MCP) server built with Python, demonstrating 
 - **Run tests:**
   ```bash
   python3 test_server.py
+  ```
+
+- **Test SQLite functionality:**
+  ```bash
+  python3 test_sqlite.py
   ```
 
 ## Usage with MCP Clients
@@ -136,3 +142,26 @@ The included test script (`test_server.py`) verifies:
 - Resources are accessible
 - Prompts are available
 - Basic calculator functionality works
+
+### SQLite Database Testing
+
+The `test_sqlite.py` script demonstrates:
+- Database initialization with sample data
+- Creating tables for users, products, and orders
+- Inserting and querying data
+- JOIN operations across tables
+- Statistical queries and aggregations
+
+Run: `python3 test_sqlite.py`
+
+## SQLite Tool Features
+
+The SQLite tool provides:
+- **Local database storage** without external dependencies
+- **Sample data initialization** for quick testing
+- **Full SQL support** for CREATE, INSERT, UPDATE, DELETE, SELECT
+- **Automatic LIMIT clauses** for SELECT queries (safety)
+- **Structured JSON responses** with metadata
+- **Error handling** for SQLite exceptions
+
+See [`SQLITE_TOOL.md`](SQLITE_TOOL.md) for detailed documentation.

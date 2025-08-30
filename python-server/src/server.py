@@ -16,6 +16,8 @@ import sys
 import datetime
 import platform
 import random
+import sqlite3
+import os
 from typing import Any, Dict, List, Optional
 
 import mysql.connector
@@ -192,6 +194,38 @@ async def handle_list_tools() -> list[types.Tool]:
                 },
                 "required": ["host", "user", "password", "database", "query"]
             }
+        ),
+        types.Tool(
+            name="sqlite-query",
+            description="Execute SQLite queries and manage local database",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "database": {
+                        "type": "string",
+                        "description": "Database file path (relative to python-server directory)",
+                        "default": "data.db"
+                    },
+                    "query": {
+                        "type": "string",
+                        "description": "SQL query to execute"
+                    },
+                    "action": {
+                        "type": "string",
+                        "enum": ["query", "init", "drop"],
+                        "description": "Action to perform: query (execute SQL), init (create sample tables), drop (delete database)",
+                        "default": "query"
+                    },
+                    "limit": {
+                        "type": "number",
+                        "minimum": 1,
+                        "maximum": 1000,
+                        "default": 100,
+                        "description": "Maximum number of rows to return for SELECT queries"
+                    }
+                },
+                "required": ["query"]
+            }
         )
     ]
 
@@ -357,6 +391,159 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
             return [types.TextContent(
                 type="text",
                 text=f"MySQL Error: {str(e)}"
+            )]
+        except Exception as e:
+            return [types.TextContent(
+                type="text",
+                text=f"Error: {str(e)}"
+            )]
+    
+    elif name == "sqlite-query":
+        database = arguments.get("database", "data.db")
+        query = arguments.get("query")
+        action = arguments.get("action", "query")
+        limit = arguments.get("limit", 100)
+        
+        # Ensure database path is relative to python-server directory
+        db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), database)
+        
+        try:
+            if action == "drop":
+                if os.path.exists(db_path):
+                    os.remove(db_path)
+                    return [types.TextContent(
+                        type="text",
+                        text=f"Database {database} deleted successfully"
+                    )]
+                else:
+                    return [types.TextContent(
+                        type="text",
+                        text=f"Database {database} does not exist"
+                    )]
+            
+            elif action == "init":
+                # Create sample database with tables
+                conn = sqlite3.connect(db_path)
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                
+                # Create tables
+                init_queries = [
+                    """CREATE TABLE IF NOT EXISTS users (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT NOT NULL,
+                        email TEXT UNIQUE NOT NULL,
+                        age INTEGER,
+                        country TEXT,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    )""",
+                    """CREATE TABLE IF NOT EXISTS products (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT NOT NULL,
+                        price REAL NOT NULL,
+                        category TEXT,
+                        in_stock BOOLEAN DEFAULT 1,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    )""",
+                    """CREATE TABLE IF NOT EXISTS orders (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER,
+                        product_id INTEGER,
+                        quantity INTEGER DEFAULT 1,
+                        total REAL,
+                        status TEXT DEFAULT 'pending',
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES users (id),
+                        FOREIGN KEY (product_id) REFERENCES products (id)
+                    )"""
+                ]
+                
+                for init_query in init_queries:
+                    cursor.execute(init_query)
+                
+                # Insert sample data
+                sample_users = [
+                    ("Alice Johnson", "alice@example.com", 28, "US"),
+                    ("Bob Smith", "bob@example.com", 35, "UK"),
+                    ("Carol Davis", "carol@example.com", 42, "CA"),
+                    ("David Wilson", "david@example.com", 31, "AU"),
+                    ("Eva Brown", "eva@example.com", 26, "DE")
+                ]
+                
+                sample_products = [
+                    ("Laptop", 999.99, "Electronics"),
+                    ("Coffee Mug", 15.99, "Home"),
+                    ("Running Shoes", 79.99, "Sports"),
+                    ("Programming Book", 49.99, "Books"),
+                    ("Wireless Headphones", 129.99, "Electronics")
+                ]
+                
+                sample_orders = [
+                    (1, 1, 1, 999.99, "delivered"),
+                    (2, 3, 2, 159.98, "shipped"),
+                    (3, 2, 1, 15.99, "pending"),
+                    (1, 4, 1, 49.99, "confirmed"),
+                    (4, 5, 1, 129.99, "delivered")
+                ]
+                
+                cursor.executemany("INSERT OR IGNORE INTO users (name, email, age, country) VALUES (?, ?, ?, ?)", sample_users)
+                cursor.executemany("INSERT OR IGNORE INTO products (name, price, category) VALUES (?, ?, ?)", sample_products)
+                cursor.executemany("INSERT OR IGNORE INTO orders (user_id, product_id, quantity, total, status) VALUES (?, ?, ?, ?, ?)", sample_orders)
+                
+                conn.commit()
+                conn.close()
+                
+                return [types.TextContent(
+                    type="text",
+                    text=f"Database {database} initialized with sample data successfully"
+                )]
+            
+            else:  # action == "query"
+                conn = sqlite3.connect(db_path)
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                
+                # Add LIMIT clause for SELECT queries if not present
+                trimmed_query = query.strip().lower()
+                final_query = query
+                if trimmed_query.startswith('select') and 'limit' not in trimmed_query:
+                    final_query += f" LIMIT {limit}"
+                
+                cursor.execute(final_query)
+                
+                if trimmed_query.startswith('select'):
+                    rows = cursor.fetchall()
+                    data = [dict(row) for row in rows]
+                    field_names = [desc[0] for desc in cursor.description] if cursor.description else []
+                    
+                    results = {
+                        "database": database,
+                        "query": final_query,
+                        "rowCount": len(data),
+                        "data": data,
+                        "fields": field_names
+                    }
+                else:
+                    # For INSERT, UPDATE, DELETE queries
+                    conn.commit()
+                    results = {
+                        "database": database,
+                        "query": final_query,
+                        "rowsAffected": cursor.rowcount,
+                        "lastInsertId": cursor.lastrowid if cursor.lastrowid else None
+                    }
+                
+                conn.close()
+                
+                return [types.TextContent(
+                    type="text",
+                    text=json.dumps(results, indent=2, default=str)
+                )]
+                
+        except sqlite3.Error as e:
+            return [types.TextContent(
+                type="text",
+                text=f"SQLite Error: {str(e)}"
             )]
         except Exception as e:
             return [types.TextContent(
